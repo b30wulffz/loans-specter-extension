@@ -1,0 +1,18 @@
+{% from 'components/menu_item.jinja' import menu_item %}
+
+{# 
+    menu - Tabs menu to navigate between the loans screens.
+    Parameters:
+    - active_menuitem: Current active tab. Options: 'general', 'settings', ...
+ #}
+{% macro menu(active_menuitem) -%}
+	<nav class="row collapse-on-mobile">
+		{{ menu_item(service.id, 'index', 'Dashboard', active_menuitem, isLeft=true) }}
+		{{ menu_item(service.id, 'pending_request', 'Pending Requests', active_menuitem) }}
+		{{ menu_item(service.id, 'active_loans', 'Active Loans', active_menuitem) }}
+		{{ menu_item(service.id, 'settings', 'Settings', active_menuitem, isRight=true) }}
+		<a href="javascript:void(0);" class="mobile-nav-icon" onclick="toggleMobileNav(this, `{{ url_for('static', filename='img/expand-more.svg') }}`, `{{ url_for('static', filename='img/expand-less.svg') }}`)">
+			<img style="width: 36px;" src="{{ url_for('static', filename='img/expand-more.svg') }}"/>
+		</a>
+	</nav>
+{%- endmacro %}

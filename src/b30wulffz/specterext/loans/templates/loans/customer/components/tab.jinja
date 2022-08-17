@@ -1,0 +1,8 @@
+{% extends "loans/base.jinja" %}
+{% block main %}
+    <img src="{{ url_for(service.id +'_endpoint' + '.static', filename=service.logo) }}" width="300"/>    
+    {% from 'loans/customer/components/menu.jinja' import menu with context %}
+    {{ menu(tab) }}
+    {% block content %}
+    {% endblock %}
+{% endblock %}

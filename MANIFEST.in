@@ -1,0 +1,5 @@
+recursive-include src/b30wulffz/specterext/loans/templates *
+recursive-include src/b30wulffz/specterext/loans/static *
+recursive-include src/b30wulffz/specterext/loans/*/LC_MESSAGES *.mo
+recursive-include src/b30wulffz/specterext/loans/translations/*/LC_MESSAGES *.po
+include requirements.txt
