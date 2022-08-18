@@ -1,5 +1,6 @@
 from email import message
 import logging
+from mimetypes import common_types
 from os import access
 import re
 import uuid
@@ -13,6 +14,7 @@ from cryptoadvance.specter.user import User
 from cryptoadvance.specter.wallet import Wallet
 from .service import LoansService
 
+import threading
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 
@@ -29,13 +31,23 @@ def specter() -> Specter:
     return app.specter
 
 
-def fetch_amount():
-    data = LoansService.get_current_user_service_data()
-    return {
-        "btc_amount": data["btc_amount"],
-        "ecash_amount": data["ecash_amount"],
-    }
+def set_interval(func, sec):
+    def func_wrapper():
+        set_interval(func, sec)
+        func()
+    t = threading.Timer(sec, func_wrapper)
+    t.start()
+    return t
 
+
+# def fetch_amount():
+#     data = LoansService.get_current_user_service_data()
+#     return {
+#         "btc_amount": data["btc_amount"],
+#         "ecash_amount": data["ecash_amount"],
+#     }
+
+# month vs rate of the loan
 time_rate = {
     "3": 2,
     "6": 4,
@@ -43,16 +55,95 @@ time_rate = {
     "12": 8,
 }
 
+def update_loan_due():
+    now = datetime.now()
+    common_data = LoansService.get_common_service_data()
+    for ind in range(len(common_data["active_loans"])):
+        loan = common_data["active_loans"][ind]
+        due_date = datetime.strptime(loan["due_date"], "%d-%m-%Y %H:%M:%S")
+        diff = relativedelta(now, due_date)
+
+        # assuming this algo runs atleast every month
+        if (diff.years * 12) + diff.months > 0:
+            due_date = (due_date + relativedelta(months=+1)).strftime("%d-%m-%Y %H:%M:%S")
+            loan["months"] -= 1
+            loan["due"] = (loan["due"]*1.02) + loan["monthly_due"] # 2% fine if not paid
+            loan["due_date"] = due_date
+            common_data["active_loans"][ind] = loan
+
+    LoansService.update_common_service_data(common_data)
+
+# runs and updates loan due every 60 sec
+def loan_event_loop():
+    set_interval(update_loan_due, 60) 
+
+# checks if there are any pending transaction in the escrow
+def escrow_facilitate_transaction():
+    username = str(current_user)
+
+    user_data = LoansService.get_current_user_service_data()
+    common_data = LoansService.get_common_service_data()
+
+    if username == "admin":
+        if "deduct_btc" not in common_data:
+            common_data["deduct_btc"] = 0
+        # assumes that bank as btc else, it will keep it negative, i.e. due
+        user_data["btc_amount"] -= common_data["deduct_btc"]
+        common_data["deduct_btc"] = 0
+    else:
+        if "return_btc" not in common_data:
+            common_data["return_btc"] = {}
+        if username not in common_data["return_btc"]:
+            common_data["return_btc"][username] = 0
+        user_data["btc_amount"] += common_data["return_btc"][username] 
+        common_data["return_btc"][username] = 0
+    
+    LoansService.update_common_service_data(common_data)
+    LoansService.update_current_user_service_data(user_data)
+
+
+def init():
+    username = str(current_user)
+
+    # updating personal wallet
+    data = LoansService.get_current_user_service_data()
+    if "btc_amount" not in data: # dummy wallet for proof of concept
+        data["btc_amount"] = 121.10
+        data["ecash_amount"] = 2300
+        LoansService.update_current_user_service_data(data)
+
+    # custom struct for data storage
+    common_data = LoansService.get_common_service_data()
+    
+    if "ecash_addresses" not in common_data:
+        common_data["ecash_addresses"] = {}
+    if "incoming_requests" not in common_data:
+        common_data["incoming_requests"] = []
+    if "active_loans" not in common_data:
+        common_data["active_loans"] = []
+    if "inactive_loans" not in common_data:
+        common_data["inactive_loans"] = []
+    if "return_btc" not in common_data:
+        common_data["return_btc"] = {}
+    if username not in common_data["return_btc"]:
+        common_data["return_btc"][username] = 0
+    if "deduct_btc" not in common_data:
+        common_data["deduct_btc"] = 0
+
+    LoansService.update_common_service_data(common_data)
+
+    # triggering dependency functions
+    loan_event_loop()
+    escrow_facilitate_transaction()
 
 @loans_endpoint.route("/", methods=["GET", "POST"])
 @login_required
 @user_secret_decrypted_required
 def index():
+    init()
+    username = str(current_user)
     data = LoansService.get_current_user_service_data()
-    if "btc_amount" not in data: # dummy wallet for proof of concept
-        data["btc_amount"]=121.10
-        data["ecash_amount"]=2300
-        LoansService.update_current_user_service_data(data)
+    message = ""
 
     if current_user == "admin":
         return render_template(
@@ -61,43 +152,54 @@ def index():
             ecash_amount=data["ecash_amount"],
         )
     else:
-        username = str(current_user)
         common_data = LoansService.get_common_service_data()
-        print(common_data)
-        if "ecash_addresses" not in common_data:
-            common_data["ecash_addresses"] = {}
-            LoansService.update_common_service_data(common_data)
-        if "incoming_requests" not in common_data:
-            common_data["incoming_requests"] = []
-            LoansService.update_common_service_data(common_data)
+        # print(common_data)
+        # if "ecash_addresses" not in common_data:
+        #     common_data["ecash_addresses"] = {}
+        #     LoansService.update_common_service_data(common_data)
+        # if "incoming_requests" not in common_data:
+        #     common_data["incoming_requests"] = []
+        #     LoansService.update_common_service_data(common_data)
 
         addresses_list = [y[0] for y in filter(lambda x: username in x[1]["user"], common_data["ecash_addresses"].items())]
 
         print(request.method)
         if request.method == "POST":
-            loan_req = {
-                "id": uuid.uuid4().hex,
-                "amount": float(request.form.get("amount", 0)),
-                "rate": time_rate[request.form.get("rate", "")],
-                "months": int(request.form.get("rate", 0)),
-                "ecash_address": request.form.get("ecash_address", ""),
-                "user": username,
-                "status": "applied",
-                "due": 0,
-                "due_date": "",
-            }
-            btc_value = loan_req["amount"] * (100/20) / 1000 # 1 btc - 1000 ecash # actually giving 20%
-            data["btc_amount"] = data["btc_amount"] - btc_value
-            LoansService.update_current_user_service_data(data)
-            common_data["incoming_requests"] += [loan_req]
-            LoansService.update_common_service_data(common_data)
-        
+
+            if request.form.get("amount", 0) <= 0:
+                message = "Invalid Amount"
+            elif request.form.get("rate", "") not in time_rate:
+                message = "Invalid Rate Input"
+            elif request.form.get("ecash_address", "") not in common_data["ecash_addresses"]:
+                message = "Invalid Ecash Address"
+            else:
+                loan_req = {
+                    "id": uuid.uuid4().hex,
+                    "amount": float(request.form.get("amount", 0)),
+                    "rate": time_rate[request.form.get("rate", "")],
+                    "months": int(request.form.get("rate", 0)),
+                    "ecash_address": request.form.get("ecash_address", ""),
+                    "user": username,
+                    "status": "applied",
+                    # "due": 0,
+                    # "due_date": "",
+                }
+                btc_value = loan_req["amount"] * (100/20) / 1000 # 1 btc - 1000 ecash # actually giving 20%
+                if btc_value < data["btc_amount"]:
+                    message = "Not enough bitcoins found"
+                else:
+                    data["btc_amount"] = data["btc_amount"] - btc_value
+                    LoansService.update_current_user_service_data(data)
+                    common_data["incoming_requests"] += [loan_req]
+                    LoansService.update_common_service_data(common_data)
+                    message = "Loan applied successfully"
 
         return render_template(
             "loans/customer/index.jinja",
             btc_amount=data["btc_amount"],
             ecash_amount=data["ecash_amount"],
-            addresses_list=addresses_list
+            addresses_list=addresses_list, 
+            message = message
         )
 
 
@@ -105,15 +207,17 @@ def index():
 @login_required
 @user_secret_decrypted_required
 def active_loans():
-    common_data = LoansService.get_common_service_data()
+    init()
     username = str(current_user)
-    print(common_data)
+
+    common_data = LoansService.get_common_service_data()
+    # print(common_data)
     data = LoansService.get_current_user_service_data()
-    if "active_loans" not in common_data:
-        common_data["active_loans"] = []
-        LoansService.update_common_service_data(common_data)
+    # if "active_loans" not in common_data:
+    #     common_data["active_loans"] = []
+    #     LoansService.update_common_service_data(common_data)
     active_loans = common_data["active_loans"]
-    print(active_loans)
+    # print(active_loans)
     if current_user == "admin":
         return render_template(
             "loans/lender/active_loans.jinja",
@@ -144,10 +248,8 @@ def active_loans():
                         message += ". Loan cleared."
                         
                         # return back btc to user's wallet
-                        if "deduct_btc" not in common_data:
-                            common_data["deduct_btc"] = {}
-                        if username not in common_data["deduct_btc"]:
-                            common_data["deduct_btc"] = 0
+                        # if "deduct_btc" not in common_data:
+                        #     common_data["deduct_btc"] = 0
                         common_data["deduct_btc"] += loan["btc_value"] # pending deduction from bank's wallet
                         common_data["active_loans"].pop(index)
                     else:
@@ -169,27 +271,29 @@ def active_loans():
 @login_required
 @user_secret_decrypted_required
 def pending_request():
+    init()
     username = str(current_user)
+
     common_data = LoansService.get_common_service_data()
-    print(common_data)
-    if "ecash_addresses" not in common_data:
-        common_data["ecash_addresses"] = {}
-        LoansService.update_common_service_data(common_data)
-    if "incoming_requests" not in common_data:
-        common_data["incoming_requests"] = []
-        LoansService.update_common_service_data(common_data)
-    if "active_loans" not in common_data:
-        common_data["active_loans"] = []
-        LoansService.update_common_service_data(common_data)
+    # print(common_data)
+    # if "ecash_addresses" not in common_data:
+    #     common_data["ecash_addresses"] = {}
+    #     LoansService.update_common_service_data(common_data)
+    # if "incoming_requests" not in common_data:
+    #     common_data["incoming_requests"] = []
+    #     LoansService.update_common_service_data(common_data)
+    # if "active_loans" not in common_data:
+    #     common_data["active_loans"] = []
+    #     LoansService.update_common_service_data(common_data)
     print(common_data)
 
     if current_user == "admin":
         if request.method == "POST":
             loan_id = request.form.get("id", "")
             button = request.form.get("button", "")
-            print(common_data["incoming_requests"])
-            print(loan_id)
-            print(list(filter(lambda x : x["id"] == loan_id, common_data["incoming_requests"])))
+            # print(common_data["incoming_requests"])
+            # print(loan_id)
+            # print(list(filter(lambda x : x["id"] == loan_id, common_data["incoming_requests"])))
             loan_req = list(filter(lambda x : x["id"] == loan_id, common_data["incoming_requests"]))[0]
             # remove from incoming requests
             common_data["incoming_requests"].remove(loan_req)
@@ -198,8 +302,10 @@ def pending_request():
                 
                 loan_req["btc_value"] = btc_value
                 loan_req["status"] = "active"
-                loan_req["due"] = (loan_req["amount"] * (100+loan_req["rate"])/100)/loan_req["months"]
-                loan_req["due_date"] = str(date.today() + relativedelta(months=+1))
+                loan_req["monthly_due"] = (loan_req["amount"] * (100+loan_req["rate"])/100)/loan_req["months"]
+                loan_req["due"] = loan_req["monthly_due"]
+                # loan_req["due_date"] = str(datetime.today() + relativedelta(months=+1))
+                loan_req["due_date"] =  (datetime.today() + relativedelta(months=+1)).strftime("%d-%m-%Y %H:%M:%S")
 
                 # add to active loans
                 common_data["active_loans"].append(loan_req)
@@ -218,14 +324,14 @@ def pending_request():
                 loan_req["status"] = "declined"
 
                 #return back btc to user's wallet
-                if "return_btc" not in common_data:
-                    common_data["return_btc"] = {}
+                # if "return_btc" not in common_data:
+                #     common_data["return_btc"] = {}
                 if username not in common_data["return_btc"]:
                     common_data["return_btc"][loan_req["user"]] = 0
                 common_data["return_btc"][loan_req["user"]] += btc_value
 
-                if "inactive_loans" not in common_data:
-                    common_data["inactive_loans"] = [] 
+                # if "inactive_loans" not in common_data:
+                #     common_data["inactive_loans"] = [] 
                 common_data["inactive_loans"].append(loan_req)
                 LoansService.update_common_service_data(common_data)
 
@@ -245,21 +351,23 @@ def pending_request():
 @login_required
 @user_secret_decrypted_required
 def settings():
+    init()
+    username = str(current_user)
+
     if current_user == "admin":
         return render_template(
             "loans/error.jinja",
         )
     else:
         message = ""
-        username = str(current_user)
         if request.method == "POST":
             ecash_address = request.form.get("ecash_address", "")
             if len(ecash_address) != 10:
                 message = "Incorrect address format"
             else:
                 data = LoansService.get_common_service_data()
-                if "ecash_addresses" not in data:
-                    data["ecash_addresses"] = {}
+                # if "ecash_addresses" not in data:
+                #     data["ecash_addresses"] = {}
                 if ecash_address not in data["ecash_addresses"]:
                     data["ecash_addresses"][ecash_address] = {
                         "balance": 0,
