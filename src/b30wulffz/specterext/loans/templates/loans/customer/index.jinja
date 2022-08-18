@@ -110,7 +110,7 @@
             margin-top: 30px
         }
     </style>
-
+    {{ message }}
     <div class="content-container">
     <div class="wallet-info-container">
         <div>
@@ -120,7 +120,7 @@
         Ecash : {{ ecash_amount }} $
         </div>
     </div>
-    <form class="new-form" action="./" method="POST">
+    <form class="new-form" action="./"  method="POST">
 
         <input type="hidden" class="csrf-token" name="csrf_token" value="{{ csrf_token() }}"/>
         

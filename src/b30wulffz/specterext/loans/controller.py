@@ -39,14 +39,6 @@ def set_interval(func, sec):
     t.start()
     return t
 
-
-# def fetch_amount():
-#     data = LoansService.get_current_user_service_data()
-#     return {
-#         "btc_amount": data["btc_amount"],
-#         "ecash_amount": data["ecash_amount"],
-#     }
-
 # month vs rate of the loan
 time_rate = {
     "3": 2,
@@ -108,8 +100,10 @@ def init():
     # updating personal wallet
     data = LoansService.get_current_user_service_data()
     if "btc_amount" not in data: # dummy wallet for proof of concept
+    # if True:
         data["btc_amount"] = 121.10
-        data["ecash_amount"] = 2300
+        if current_user == "admin":
+            data["ecash_amount"] = 2300000
         LoansService.update_current_user_service_data(data)
 
     # custom struct for data storage
@@ -165,35 +159,36 @@ def index():
 
         print(request.method)
         if request.method == "POST":
-
-            if request.form.get("amount", 0) <= 0:
-                message = "Invalid Amount"
-            elif request.form.get("rate", "") not in time_rate:
-                message = "Invalid Rate Input"
-            elif request.form.get("ecash_address", "") not in common_data["ecash_addresses"]:
-                message = "Invalid Ecash Address"
-            else:
-                loan_req = {
-                    "id": uuid.uuid4().hex,
-                    "amount": float(request.form.get("amount", 0)),
-                    "rate": time_rate[request.form.get("rate", "")],
-                    "months": int(request.form.get("rate", 0)),
-                    "ecash_address": request.form.get("ecash_address", ""),
-                    "user": username,
-                    "status": "applied",
-                    # "due": 0,
-                    # "due_date": "",
-                }
-                btc_value = loan_req["amount"] * (100/20) / 1000 # 1 btc - 1000 ecash # actually giving 20%
-                if btc_value < data["btc_amount"]:
-                    message = "Not enough bitcoins found"
+            try:
+                if float(request.form.get("amount", 0)) <= 0:
+                    message = "Invalid Amount"
+                elif request.form.get("rate", "") not in time_rate:
+                    message = "Invalid Rate Input"
+                elif request.form.get("ecash_address", "") not in common_data["ecash_addresses"]:
+                    message = "Invalid Ecash Address"
                 else:
-                    data["btc_amount"] = data["btc_amount"] - btc_value
-                    LoansService.update_current_user_service_data(data)
-                    common_data["incoming_requests"] += [loan_req]
-                    LoansService.update_common_service_data(common_data)
-                    message = "Loan applied successfully"
-
+                    loan_req = {
+                        "id": uuid.uuid4().hex,
+                        "amount": float(request.form.get("amount", 0)),
+                        "rate": time_rate[request.form.get("rate", "")],
+                        "months": int(request.form.get("rate", 0)),
+                        "ecash_address": request.form.get("ecash_address", ""),
+                        "user": username,
+                        "status": "applied",
+                        # "due": 0,
+                        # "due_date": "",
+                    }
+                    btc_value = loan_req["amount"] * (100/20) / 1000 # 1 btc - 1000 ecash # actually giving 20%
+                    if btc_value > data["btc_amount"]:
+                        message = "Not enough bitcoins found"
+                    else:
+                        data["btc_amount"] = data["btc_amount"] - btc_value
+                        LoansService.update_current_user_service_data(data)
+                        common_data["incoming_requests"] += [loan_req]
+                        LoansService.update_common_service_data(common_data)
+                        message = "Loan applied successfully"
+            except:
+                message = "Invalid input"
         return render_template(
             "loans/customer/index.jinja",
             btc_amount=data["btc_amount"],
@@ -227,42 +222,50 @@ def active_loans():
         active_loans = list(filter(lambda x: x["user"] == username, active_loans))
 
         message = ""
+
+        addresses_list = [y[0] for y in filter(lambda x: username in x[1]["user"], common_data["ecash_addresses"].items())]
  
         if request.method == "POST":
             button = request.form.get("button", "")
             if button == "pay":
                 loan_id = request.form.get("id", "")
-                loan = list(filter(lambda x: x["id"] == loan_id, common_data["active_loans"]))[0]
-                index = common_data["active_loans"].index(loan)
-                if loan["due"] == 0:
-                    message = "Due is already paid for this month"
-                elif loan["due"] <= data["ecash_amount"]:
-                    data["ecash_amount"] -= loan["due"]
-                    loan["due"] = 0
-                    LoansService.update_current_user_service_data(data)
+                ecash_address = request.form.get("ecash_address", "")
 
-                    message = "Due paid successfully"
-
-                    # check if loan is resolved
-                    if loan["months"] == 1:
-                        message += ". Loan cleared."
-                        
-                        # return back btc to user's wallet
-                        # if "deduct_btc" not in common_data:
-                        #     common_data["deduct_btc"] = 0
-                        common_data["deduct_btc"] += loan["btc_value"] # pending deduction from bank's wallet
-                        common_data["active_loans"].pop(index)
-                    else:
-                        common_data["active_loans"][index] = loan
-
-                    LoansService.update_common_service_data(common_data)
+                if ecash_address not in common_data["ecash_addresses"]:
+                    message = "Invalid Ecash Address"
                 else:
-                    message = "You do not have enough ecash in wallet"
+                    loan = list(filter(lambda x: x["id"] == loan_id, common_data["active_loans"]))[0]
+                    index = common_data["active_loans"].index(loan)
+                    if loan["due"] == 0:
+                        message = "Due is already paid for this month"
+                    elif loan["due"] <= common_data["ecash_addresses"][ecash_address]["balance"]:
+                        common_data["ecash_addresses"][ecash_address]["balance"] -= loan["due"]
+                        loan["due"] = 0
+                        LoansService.update_common_service_data(common_data)
+
+                        message = "Due paid successfully"
+
+                        # check if loan is resolved
+                        if loan["months"] == 1:
+                            message += ". Loan cleared."
+                            
+                            # return back btc to user's wallet
+                            # if "deduct_btc" not in common_data:
+                            #     common_data["deduct_btc"] = 0
+                            common_data["deduct_btc"] += loan["btc_value"] # pending deduction from bank's wallet
+                            common_data["active_loans"].pop(index)
+                        else:
+                            common_data["active_loans"][index] = loan
+
+                        LoansService.update_common_service_data(common_data)
+                    else:
+                        message = "You do not have enough ecash in wallet"
 
         return render_template(
             "loans/customer/active_loans.jinja",
             active_loans=active_loans,
-            message=message
+            message=message,
+            addresses_list=addresses_list
         )
 
 
@@ -275,43 +278,28 @@ def pending_request():
     username = str(current_user)
 
     common_data = LoansService.get_common_service_data()
-    # print(common_data)
-    # if "ecash_addresses" not in common_data:
-    #     common_data["ecash_addresses"] = {}
-    #     LoansService.update_common_service_data(common_data)
-    # if "incoming_requests" not in common_data:
-    #     common_data["incoming_requests"] = []
-    #     LoansService.update_common_service_data(common_data)
-    # if "active_loans" not in common_data:
-    #     common_data["active_loans"] = []
-    #     LoansService.update_common_service_data(common_data)
-    print(common_data)
-
+    
     if current_user == "admin":
         if request.method == "POST":
             loan_id = request.form.get("id", "")
             button = request.form.get("button", "")
-            # print(common_data["incoming_requests"])
-            # print(loan_id)
-            # print(list(filter(lambda x : x["id"] == loan_id, common_data["incoming_requests"])))
             loan_req = list(filter(lambda x : x["id"] == loan_id, common_data["incoming_requests"]))[0]
             # remove from incoming requests
             common_data["incoming_requests"].remove(loan_req)
             btc_value = loan_req["amount"] * (100/20) / 1000 # 1 btc - 1000 ecash # actually giving 20%
-            if button == "accept":
+            data = LoansService.get_current_user_service_data()
+            if button == "accept" and loan_req["amount"] <= data["ecash_amount"]:
                 
                 loan_req["btc_value"] = btc_value
                 loan_req["status"] = "active"
                 loan_req["monthly_due"] = (loan_req["amount"] * (100+loan_req["rate"])/100)/loan_req["months"]
                 loan_req["due"] = loan_req["monthly_due"]
-                # loan_req["due_date"] = str(datetime.today() + relativedelta(months=+1))
                 loan_req["due_date"] =  (datetime.today() + relativedelta(months=+1)).strftime("%d-%m-%Y %H:%M:%S")
 
                 # add to active loans
                 common_data["active_loans"].append(loan_req)
-
+                print(loan_req)
                 # update the bank's value
-                data = LoansService.get_current_user_service_data()
                 data["btc_amount"] += btc_value # bug - init
                 data["ecash_amount"] -= loan_req["amount"]
                 LoansService.update_current_user_service_data(data)
@@ -323,6 +311,9 @@ def pending_request():
             elif button == "decline":
                 loan_req["status"] = "declined"
 
+                if loan_req["amount"] > data["ecash_amount"]:
+                    message = "Bank does not has enough eCash"
+                
                 #return back btc to user's wallet
                 # if "return_btc" not in common_data:
                 #     common_data["return_btc"] = {}
@@ -365,22 +356,22 @@ def settings():
             if len(ecash_address) != 10:
                 message = "Incorrect address format"
             else:
-                data = LoansService.get_common_service_data()
+                common_data = LoansService.get_common_service_data()
                 # if "ecash_addresses" not in data:
                 #     data["ecash_addresses"] = {}
-                if ecash_address not in data["ecash_addresses"]:
-                    data["ecash_addresses"][ecash_address] = {
+                if ecash_address not in common_data["ecash_addresses"]:
+                    common_data["ecash_addresses"][ecash_address] = {
                         "balance": 0,
                         "user": [username]
                     }
                     message = "Ecash address added successfully"
                 else:
-                    if username not in data["ecash_addresses"][ecash_address]["user"]:
-                        data["ecash_addresses"][ecash_address]["user"] = data["ecash_addresses"][ecash_address]["user"] + [username]
+                    if username not in common_data["ecash_addresses"][ecash_address]["user"]:
+                        common_data["ecash_addresses"][ecash_address]["user"] = common_data["ecash_addresses"][ecash_address]["user"] + [username]
                         message = "Ecash address added successfully"
                     else:
                         message = "Ecash address is already linked to your account"
-                LoansService.update_common_service_data(data)
+                LoansService.update_common_service_data(common_data)
 
         return render_template(
             "loans/customer/settings.jinja",

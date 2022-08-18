@@ -86,10 +86,12 @@
             margin: 30px;
         }
     </style>
-    {{ message }}
     {% if active_loans|length == 0%}
         <option disabled>No active loans found</option>
     {% else %}
+        <div>
+            {{ message }}
+        </div>
         {% for item in active_loans %}
             <div class="list-container">
                 <div>
@@ -104,6 +106,16 @@
                 <form action="./active_loans" method="post">
                     <input type="hidden" class="csrf-token" name="csrf_token" value="{{ csrf_token() }}"/>
                     <input type="hidden" name="id" value="{{item['id']}}" />
+                    <select name="ecash_address" placeholder="Select Addresses">
+                        <option disabled selected value> -- select an option -- </option>
+                        {% if addresses_list|length == 0%}
+                            <option disabled>No addresses found, please add an address from settings tab</option>
+                        {% else %}
+                            {% for item in addresses_list %}
+                                <option value={{item}}>{{item}}</option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
                     <button name="button" value="pay" type="submit" class="btn">Pay</button>
                 </form>
             </div>
