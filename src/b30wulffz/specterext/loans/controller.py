@@ -30,7 +30,6 @@ def specter() -> Specter:
     ''' convenience for getting the specter-object'''
     return app.specter
 
-
 def set_interval(func, sec):
     def func_wrapper():
         set_interval(func, sec)
@@ -47,20 +46,32 @@ time_rate = {
     "12": 8,
 }
 
+loan_percentage = 0.2 
+btc_equi = 1000 # 1 btc = 1000 ecash
+
+def offset_datetime_str(date):
+    return (date + relativedelta(months=+1)).strftime("%d-%m-%Y %H:%M:%S")
+    # return (date + relativedelta(seconds=+30)).strftime("%d-%m-%Y %H:%M:%S") # debug
+
 def update_loan_due():
     now = datetime.now()
     common_data = LoansService.get_common_service_data()
+
     for ind in range(len(common_data["active_loans"])):
         loan = common_data["active_loans"][ind]
+
         due_date = datetime.strptime(loan["due_date"], "%d-%m-%Y %H:%M:%S")
-        diff = relativedelta(now, due_date)
 
         # assuming this algo runs atleast every month
-        if (diff.years * 12) + diff.months > 0:
-            due_date = (due_date + relativedelta(months=+1)).strftime("%d-%m-%Y %H:%M:%S")
-            loan["months"] -= 1
-            loan["due"] = (loan["due"]*1.02) + loan["monthly_due"] # 2% fine if not paid
-            loan["due_date"] = due_date
+        if now > due_date:
+            # due_date = (due_date + relativedelta(months=+1)).strftime("%d-%m-%Y %H:%M:%S")
+            loan["due"] = (loan["due"]*1.02) # 2% fine if not paid
+            if(loan["months"] != 1):
+                loan["due"] += loan["monthly_due"] # 2% fine if not paid
+                loan["months"] -= 1
+            loan["due_date"] = offset_datetime_str(due_date)
+            # loan["due_date"] = (datetime.today() + relativedelta(seconds=+40)).strftime("%d-%m-%Y %H:%M:%S") #dev
+            # loan["due_date"] = due_date
             common_data["active_loans"][ind] = loan
 
     LoansService.update_common_service_data(common_data)
@@ -77,11 +88,16 @@ def escrow_facilitate_transaction():
     common_data = LoansService.get_common_service_data()
 
     if username == "admin":
-        if "deduct_btc" not in common_data:
-            common_data["deduct_btc"] = 0
+        # if "deduct_btc" not in common_data:
+        #     common_data["deduct_btc"] = 0
         # assumes that bank as btc else, it will keep it negative, i.e. due
         user_data["btc_amount"] -= common_data["deduct_btc"]
         common_data["deduct_btc"] = 0
+
+        # if "return_ecash" not in common_data:
+        #     common_data["deduct_btc"] = 0
+        user_data["ecash_amount"] += common_data["return_ecash"]
+        common_data["return_ecash"] = 0
     else:
         if "return_btc" not in common_data:
             common_data["return_btc"] = {}
@@ -100,7 +116,7 @@ def init():
     # updating personal wallet
     data = LoansService.get_current_user_service_data()
     if "btc_amount" not in data: # dummy wallet for proof of concept
-    # if True:
+    # if True: #dev
         data["btc_amount"] = 121.10
         if current_user == "admin":
             data["ecash_amount"] = 2300000
@@ -123,6 +139,8 @@ def init():
         common_data["return_btc"][username] = 0
     if "deduct_btc" not in common_data:
         common_data["deduct_btc"] = 0
+    if "return_ecash" not in common_data:
+        common_data["return_ecash"] = 0
 
     LoansService.update_common_service_data(common_data)
 
@@ -174,11 +192,10 @@ def index():
                         "months": int(request.form.get("rate", 0)),
                         "ecash_address": request.form.get("ecash_address", ""),
                         "user": username,
-                        "status": "applied",
-                        # "due": 0,
-                        # "due_date": "",
+                        "status": "applied"
                     }
-                    btc_value = loan_req["amount"] * (100/20) / 1000 # 1 btc - 1000 ecash # actually giving 20%
+                    # btc_value = loan_req["amount"] * (100/20) / 1000 # 1 btc - 1000 ecash # actually giving 20%
+                    btc_value = loan_req["amount"] / (loan_percentage * btc_equi) # 1 btc - 1000 ecash # actually giving 20%
                     if btc_value > data["btc_amount"]:
                         message = "Not enough bitcoins found"
                     else:
@@ -192,7 +209,6 @@ def index():
         return render_template(
             "loans/customer/index.jinja",
             btc_amount=data["btc_amount"],
-            ecash_amount=data["ecash_amount"],
             addresses_list=addresses_list, 
             message = message
         )
@@ -240,6 +256,7 @@ def active_loans():
                         message = "Due is already paid for this month"
                     elif loan["due"] <= common_data["ecash_addresses"][ecash_address]["balance"]:
                         common_data["ecash_addresses"][ecash_address]["balance"] -= loan["due"]
+                        common_data["return_ecash"] += loan["due"]
                         loan["due"] = 0
                         LoansService.update_common_service_data(common_data)
 
@@ -252,14 +269,18 @@ def active_loans():
                             # return back btc to user's wallet
                             # if "deduct_btc" not in common_data:
                             #     common_data["deduct_btc"] = 0
+                            data["btc_amount"] += loan["btc_value"]
                             common_data["deduct_btc"] += loan["btc_value"] # pending deduction from bank's wallet
                             common_data["active_loans"].pop(index)
                         else:
                             common_data["active_loans"][index] = loan
 
                         LoansService.update_common_service_data(common_data)
+                        LoansService.update_current_user_service_data(data)
                     else:
                         message = "You do not have enough ecash in wallet"
+        
+        active_loans = list(filter(lambda x: x["user"] == username, common_data["active_loans"]))
 
         return render_template(
             "loans/customer/active_loans.jinja",
@@ -294,11 +315,11 @@ def pending_request():
                 loan_req["status"] = "active"
                 loan_req["monthly_due"] = (loan_req["amount"] * (100+loan_req["rate"])/100)/loan_req["months"]
                 loan_req["due"] = loan_req["monthly_due"]
-                loan_req["due_date"] =  (datetime.today() + relativedelta(months=+1)).strftime("%d-%m-%Y %H:%M:%S")
+                loan_req["due_date"] =  offset_datetime_str(datetime.today())
 
                 # add to active loans
                 common_data["active_loans"].append(loan_req)
-                print(loan_req)
+                # print(loan_req)
                 # update the bank's value
                 data["btc_amount"] += btc_value # bug - init
                 data["ecash_amount"] -= loan_req["amount"]
@@ -306,7 +327,7 @@ def pending_request():
 
                 # add this amount to user's wallet
                 common_data["ecash_addresses"][loan_req["ecash_address"]]["balance"] += loan_req["amount"]
-                print(common_data)
+                # print(common_data)
                 LoansService.update_common_service_data(common_data)
             elif button == "decline":
                 loan_req["status"] = "declined"
