@@ -116,17 +116,30 @@
         <div>
             BTC Wallet : {{ btc_amount }} BTC
         </div>
+        <div>
+            1 BTC = 200 eCash
+        </div>
     </div>
     <form class="new-form" action="./"  method="POST">
 
         <input type="hidden" class="csrf-token" name="csrf_token" value="{{ csrf_token() }}"/>
         
         <div class="form-row">
-            Loan Amount : {{ max_limit }}
+            Loan Amount:
             <input type="number" id="amount" name="amount" placeholder="Enter Amount">
         </div>
+
+        {% if req_btc != -1 %}
         <div class="form-row">
-            Interest Rate:
+            Required Bitcoins:
+            <input type="number" value="{{ req_btc }}" disabled>
+        </div>
+        {% endif %}
+
+        <button type="submit" name="action" value="get_req_btc" class="btn form-row">Get Required Bitcoins</button>
+        
+        <div class="form-row">
+            Interest Rate:  
             <select name="rate">
                 <option value="3">3 Months @ 2%</option>
                 <option value="6">6 Months @ 4%</option>
@@ -148,7 +161,7 @@
                 {% endif %}
             </select>
         </div>
-        <button type="submit" name="action" value="create" class="btn">Get Loan</button>
+        <button type="submit" name="action" value="get_loan" class="btn">Get Loan</button>
     </form>
     </div>
 

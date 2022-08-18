@@ -85,6 +85,10 @@
             width: 100%;
             margin: 30px;
         }
+        form .btn {
+            width: 100%;
+            margin: 5px 0
+        }
     </style>
     {% if active_loans|length == 0%}
         <option disabled>No active loans found</option>
@@ -101,14 +105,14 @@
                     Due Date: {{item["due_date"]}}
                 </div>
                 <div>
-                    Due this month: {{item["due"]}}
+                    Due For This Month: {{item["due"]}} eCash
                 </div>
                 <form action="./active_loans" method="post">
                     <input type="hidden" class="csrf-token" name="csrf_token" value="{{ csrf_token() }}"/>
                     <input type="hidden" name="id" value="{{item['id']}}" />
                     <select name="ecash_address" placeholder="Select Addresses">
                         <option disabled selected value> -- select an option -- </option>
-                        {% if addresses_list|length == 0%}
+                        {% if addresses_list|length == 0 %}
                             <option disabled>No addresses found, please add an address from settings tab</option>
                         {% else %}
                             {% for item in addresses_list %}
