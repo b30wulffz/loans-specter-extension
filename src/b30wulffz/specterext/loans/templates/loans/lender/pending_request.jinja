@@ -108,7 +108,7 @@
                     Loan Amount: {{item["amount"]}}
                 </div>
                 <div>
-                    Due Months: {{item["rate"]}}
+                    Due Months: {{item["monthst"]}}
                 </div>
                 <form action="./pending_request" method="post">
                     <input type="hidden" class="csrf-token" name="csrf_token" value="{{ csrf_token() }}"/>
