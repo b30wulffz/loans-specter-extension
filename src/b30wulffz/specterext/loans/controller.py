@@ -7,6 +7,7 @@ import uuid
 from flask import redirect, render_template, request, url_for, flash
 from flask import current_app as app
 from flask_login import login_required, current_user
+from flask_apscheduler import APScheduler
 
 from cryptoadvance.specter.specter import Specter
 from cryptoadvance.specter.services.controller import user_secret_decrypted_required
@@ -14,7 +15,6 @@ from cryptoadvance.specter.user import User
 from cryptoadvance.specter.wallet import Wallet
 from .service import LoansService
 
-import threading
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 
@@ -29,14 +29,6 @@ def ext() -> LoansService:
 def specter() -> Specter:
     ''' convenience for getting the specter-object'''
     return app.specter
-
-def set_interval(func, sec):
-    def func_wrapper():
-        set_interval(func, sec)
-        func()
-    t = threading.Timer(sec, func_wrapper)
-    t.start()
-    return t
 
 # month vs rate of the loan
 time_rate = {
@@ -81,9 +73,10 @@ def update_loan_due():
 
     LoansService.update_common_service_data(common_data)
 
+scheduler = APScheduler()
 # runs and updates loan due every 60 sec
-def loan_event_loop():
-    set_interval(update_loan_due, 60) 
+scheduler.add_job("update_loan", update_loan_due, trigger='interval', seconds=60)
+scheduler.start()
 
 # checks if there are any pending transaction in the escrow
 def escrow_facilitate_transaction():
@@ -150,7 +143,6 @@ def init():
     LoansService.update_common_service_data(common_data)
 
     # triggering dependency functions
-    loan_event_loop()
     escrow_facilitate_transaction()
 
 @loans_endpoint.route("/", methods=["GET", "POST"])
