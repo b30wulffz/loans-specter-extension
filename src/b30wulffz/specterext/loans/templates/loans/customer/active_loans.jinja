@@ -74,7 +74,16 @@
             color: #ccc;
             vertical-align: text-bottom;
         }
-        .list-container{
+        .list-container {
+            display: flex;
+            flex-direction: column;
+            border: thin solid var(--cmap-border-darker);
+            border-radius: 10px;
+            margin-top: 30px;
+            padding: 20px 40px;
+        }
+        
+        .list-item-container{
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -83,8 +92,29 @@
             border: thin solid var(--cmap-border-darker);
             background:  var(--cmap-border-darker);
             width: 100%;
-            margin: 30px;
+            border-radius: 10px;
         }
+
+        .list-item-container:not(:first-child) {
+            margin-top: 20px;
+        }
+
+        .list-item-row {
+            display: flex;
+        }
+
+        .list-item-row > * {
+            margin: 5px 20px
+        }
+
+        .list-content .title {
+            font-size: 0.8rem;
+        }
+
+        .wallet-dropdown{
+            min-width: 200px;
+        }
+
         form .btn {
             width: 100%;
             margin: 5px 0
@@ -96,34 +126,60 @@
         <div>
             {{ message }}
         </div>
+        <div class="list-container">
         {% for item in active_loans %}
-            <div class="list-container">
-                <div>
-                    Loan Id: {{item["id"]}}
+            <div class="list-item-container">
+                <div class="list-item-row">
+                    <div class="list-content">
+                        <div class="title">
+                            Loan Id
+                        </div>
+                        <div class="content">
+                            {{item["id"]}}
+                        </div>
+                    </div>
+
+                    <div class="list-content">
+                        <div class="title">
+                            Due Date
+                        </div>
+                        <div class="content">
+                            {{item["due_date"]}}
+                        </div>
+                    </div>
+
+                    <div class="list-content">
+                        <div class="title">
+                            Due For This Month
+                        </div>
+                        <div class="content">
+                            {{item["due"]}} eCash
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    Due Date: {{item["due_date"]}}
-                </div>
-                <div>
-                    Due For This Month: {{item["due"]}} eCash
-                </div>
+
                 <form action="./active_loans" method="post">
+
                     <input type="hidden" class="csrf-token" name="csrf_token" value="{{ csrf_token() }}"/>
                     <input type="hidden" name="id" value="{{item['id']}}" />
-                    <select name="ecash_address" placeholder="Select Addresses">
-                        <option disabled selected value> -- select an option -- </option>
-                        {% if addresses_list|length == 0 %}
-                            <option disabled>No addresses found, please add an address from settings tab</option>
-                        {% else %}
-                            {% for item in addresses_list %}
-                                <option value={{item}}>{{item}}</option>
-                            {% endfor %}
-                        {% endif %}
-                    </select>
-                    <button name="button" value="pay" type="submit" class="btn">Pay</button>
+
+                    <div class="list-item-row">
+                        <select name="ecash_address" class="wallet-dropdown" placeholder="Select Addresses">
+                            <option disabled selected value> -- Choose a wallet -- </option>
+                            {% if addresses_list|length == 0 %}
+                                <option disabled>No addresses found, please add an address from settings tab</option>
+                            {% else %}
+                                {% for item in addresses_list %}
+                                    <option value={{item}}>{{item}}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        <button name="button" value="pay" type="submit" class="btn">Pay</button>
+                    </div>
                 </form>
             </div>
         {% endfor %}
+        </div>
     {% endif %}
 {% endblock %}
 

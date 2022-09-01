@@ -8,6 +8,7 @@ from flask import redirect, render_template, request, url_for, flash
 from flask import current_app as app
 from flask_login import login_required, current_user
 from flask_apscheduler import APScheduler
+from functools import wraps
 
 from cryptoadvance.specter.specter import Specter
 from cryptoadvance.specter.services.controller import user_secret_decrypted_required
@@ -97,8 +98,8 @@ def escrow_facilitate_transaction():
         user_data["ecash_amount"] += common_data["return_ecash"]
         common_data["return_ecash"] = 0
     else:
-        if "return_btc" not in common_data:
-            common_data["return_btc"] = {}
+        # if "return_btc" not in common_data:
+        #     common_data["return_btc"] = {}
         if username not in common_data["return_btc"]:
             common_data["return_btc"][username] = 0
         user_data["btc_amount"] += common_data["return_btc"][username] 
@@ -108,48 +109,30 @@ def escrow_facilitate_transaction():
     LoansService.update_current_user_service_data(user_data)
 
 
-def init():
-    username = str(current_user)
+def init(func):
 
-    # updating personal wallet
-    data = LoansService.get_current_user_service_data()
-    if "btc_amount" not in data: # dummy wallet for proof of concept
-    # if True: #dev
-        data["btc_amount"] = 121.10
-        if current_user == "admin":
-            data["ecash_amount"] = 2300000
-        LoansService.update_current_user_service_data(data)
+    @wraps(func)
+    def decorated_view(*args, **kwargs):
+        # updating personal wallet
+        data = LoansService.get_current_user_service_data()
+        if "btc_amount" not in data: # dummy wallet for proof of concept
+        # if True: #dev
+            data["btc_amount"] = 121.10
+            if current_user == "admin":
+                data["ecash_amount"] = 2300000
+            LoansService.update_current_user_service_data(data)
 
-    # custom struct for data storage
-    common_data = LoansService.get_common_service_data()
-    
-    if "ecash_addresses" not in common_data:
-        common_data["ecash_addresses"] = {}
-    if "incoming_requests" not in common_data:
-        common_data["incoming_requests"] = []
-    if "active_loans" not in common_data:
-        common_data["active_loans"] = []
-    if "inactive_loans" not in common_data:
-        common_data["inactive_loans"] = []
-    if "return_btc" not in common_data:
-        common_data["return_btc"] = {}
-    if username not in common_data["return_btc"]:
-        common_data["return_btc"][username] = 0
-    if "deduct_btc" not in common_data:
-        common_data["deduct_btc"] = 0
-    if "return_ecash" not in common_data:
-        common_data["return_ecash"] = 0
+        # triggering dependency functions
+        escrow_facilitate_transaction()
+        return func(*args, **kwargs)
 
-    LoansService.update_common_service_data(common_data)
-
-    # triggering dependency functions
-    escrow_facilitate_transaction()
+    return decorated_view
 
 @loans_endpoint.route("/", methods=["GET", "POST"])
 @login_required
 @user_secret_decrypted_required
+@init
 def index():
-    init()
     username = str(current_user)
     data = LoansService.get_current_user_service_data()
     message = ""
@@ -229,8 +212,8 @@ def index():
 @loans_endpoint.route("/active_loans", methods=["GET", "POST"])
 @login_required
 @user_secret_decrypted_required
+@init
 def active_loans():
-    init()
     username = str(current_user)
 
     common_data = LoansService.get_common_service_data()
@@ -306,8 +289,8 @@ def active_loans():
 @loans_endpoint.route("/pending_request", methods=["GET", "POST"])
 @login_required
 @user_secret_decrypted_required
+@init
 def pending_request():
-    init()
     username = str(current_user)
 
     common_data = LoansService.get_common_service_data()
@@ -350,7 +333,7 @@ def pending_request():
                 #return back btc to user's wallet
                 # if "return_btc" not in common_data:
                 #     common_data["return_btc"] = {}
-                if username not in common_data["return_btc"]:
+                if loan_req["user"] not in common_data["return_btc"]:
                     common_data["return_btc"][loan_req["user"]] = 0
                 common_data["return_btc"][loan_req["user"]] += btc_value
 
@@ -374,8 +357,8 @@ def pending_request():
 @loans_endpoint.route("/settings", methods=["GET", "POST"])
 @login_required
 @user_secret_decrypted_required
+@init
 def settings():
-    init()
     username = str(current_user)
 
     if current_user == "admin":

@@ -74,8 +74,17 @@
             color: #ccc;
             vertical-align: text-bottom;
         }
+        
+        .list-container {
+            display: flex;
+            flex-direction: column;
+            border: thin solid var(--cmap-border-darker);
+            border-radius: 10px;
+            margin-top: 30px;
+            padding: 20px 40px;
+        }
 
-        .list-container{
+        .list-item-container{
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -84,42 +93,69 @@
             border: thin solid var(--cmap-border-darker);
             background:  var(--cmap-border-darker);
             width: 100%;
-            margin: 30px;
+            border-radius: 10px;
         }
 
-        .flex-row{
-            display:flex;
-            flex-direction: row;
+        .list-item-container:not(:first-child) {
+            margin-top: 20px;
         }
 
-        .list-container .btn {
-            margin: 10px;
+        .list-item-row {
+            display: flex;
         }
+
+        .list-item-row > * {
+            margin: 5px 20px
+        }
+
+        .list-content .title {
+            font-size: 0.8rem;
+        }
+
     </style>
     {% if incoming_loans|length == 0%}
         <option disabled>No pending loans found</option>
     {% else %}
+        <div class="list-container">
         {% for item in incoming_loans %}
-            <div class="list-container">
-                <div>
-                    Loan Id: {{item["id"]}}
-                </div>
-                <div>
-                    Loan Amount: {{item["amount"]}}
-                </div>
-                <div>
-                    Due Months: {{item["monthst"]}}
+            <div class="list-item-container">
+                <div class="list-item-row">
+                    <div class="list-content">
+                        <div class="title">
+                            Loan Id
+                        </div>
+                        <div class="content">
+                            {{item["id"]}}
+                        </div>
+                    </div>
+                    <div class="list-content">
+                        <div class="title">
+                            Loan Amount
+                        </div>
+                        <div class="content">
+                            {{item["amount"]}} eCash
+                        </div>
+                    </div>
+                    <div class="list-content">
+                        <div class="title">
+                            Due Months
+                        </div>
+                        <div class="content">
+                            {{item["months"]}}
+                        </div>
+                    </div>
                 </div>
                 <form action="./pending_request" method="post">
                     <input type="hidden" class="csrf-token" name="csrf_token" value="{{ csrf_token() }}"/>
                     <input type="hidden" name="id" value="{{item['id']}}" />
-                    <div class="flex-row">
+                    <div class="list-item-row">
                         <button name="button" value="accept" type="submit" class="btn">Accept</button>
                         <button name="button" value="decline" type="submit" class="btn">Decline</button>
                     </div>
                 </form>
             </div>
         {% endfor %}
+        </div>
     {% endif %}
 
 {% endblock %}

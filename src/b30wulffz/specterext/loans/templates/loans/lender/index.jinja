@@ -74,7 +74,18 @@
             color: #ccc;
             vertical-align: text-bottom;
         }
-         .wallet-info-container {
+
+        .content-container {
+            display: flex;
+            flex-direction: column;
+            border: thin solid var(--cmap-border-darker);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 30px;
+            box-sizing: border-box;
+        }
+
+        .wallet-info-container {
             display: flex;
             flex-direction: column;
             padding: 10px 20px;
@@ -83,20 +94,26 @@
             border: thin solid var(--cmap-border-darker);
             background:  var(--cmap-border-darker);
             width: 100%;
-            margin: 30px;
-
         }
+
+        .content-container .content-body{
+            padding: 50px;
+        }
+
     </style>
-    <div class="wallet-info-container">
-        <div>
-        BTC Wallet : {{ btc_amount }} BTC
+
+    <div class="content-container">
+        <div class="wallet-info-container">
+            <div>
+                BTC Wallet : {{ btc_amount }} BTC
+            </div>
+            <div>
+            Ecash : {{ ecash_amount }} eCash
+            </div>
         </div>
-        <div>
-        Ecash : {{ ecash_amount }} $
+        <div class="content-body">
+            Checkout Pending Request tab to process loans.
         </div>
-    </div>
-    <div>
-        Checkout Pending Request tab to process loans.
     </div>
     
 {% endblock %}

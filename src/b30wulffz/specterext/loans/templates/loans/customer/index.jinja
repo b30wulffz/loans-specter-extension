@@ -97,13 +97,14 @@
             align-items: stretch;
             padding: 30px;
         }
+        
         .form-row {
             margin-bottom: 30px;
         }
+
         .content-container {
             display: flex;
             flex-direction: column;
-
             border: thin solid var(--cmap-border-darker);
             border-radius: 10px;
             overflow: hidden;
@@ -112,57 +113,57 @@
     </style>
     {{ message }}
     <div class="content-container">
-    <div class="wallet-info-container">
-        <div>
-            BTC Wallet : {{ btc_amount }} BTC
+        <div class="wallet-info-container">
+            <div>
+                BTC Wallet : {{ btc_amount }} BTC
+            </div>
+            <div>
+                1 BTC = 200 eCash
+            </div>
         </div>
-        <div>
-            1 BTC = 200 eCash
-        </div>
-    </div>
-    <form class="new-form" action="./"  method="POST">
+        <form class="new-form" action="./"  method="POST">
 
-        <input type="hidden" class="csrf-token" name="csrf_token" value="{{ csrf_token() }}"/>
-        
-        <div class="form-row">
-            Loan Amount:
-            <input type="number" id="amount" name="amount" placeholder="Enter Amount">
-        </div>
+            <input type="hidden" class="csrf-token" name="csrf_token" value="{{ csrf_token() }}"/>
+            
+            <div class="form-row">
+                Loan Amount:
+                <input type="number" id="amount" name="amount" placeholder="Enter Amount">
+            </div>
 
-        {% if req_btc != -1 %}
-        <div class="form-row">
-            Required Bitcoins:
-            <input type="number" value="{{ req_btc }}" disabled>
-        </div>
-        {% endif %}
+            {% if req_btc != -1 %}
+            <div class="form-row">
+                Required Bitcoins:
+                <input type="number" value="{{ req_btc }}" disabled>
+            </div>
+            {% endif %}
 
-        <button type="submit" name="action" value="get_req_btc" class="btn form-row">Get Required Bitcoins</button>
-        
-        <div class="form-row">
-            Interest Rate:  
-            <select name="rate">
-                <option value="3">3 Months @ 2%</option>
-                <option value="6">6 Months @ 4%</option>
-                <option value="9">9 Months @ 6%</option>
-                <option value="12">12 Months @ 8%</option>
-            </select>
-        </div>
+            <button type="submit" name="action" value="get_req_btc" class="btn form-row">Get Required Bitcoins</button>
+            
+            <div class="form-row">
+                Interest Rate:  
+                <select name="rate">
+                    <option value="3">3 Months @ 2%</option>
+                    <option value="6">6 Months @ 4%</option>
+                    <option value="9">9 Months @ 6%</option>
+                    <option value="12">12 Months @ 8%</option>
+                </select>
+            </div>
 
-        <div class="form-row">
-            Ecash Wallet Address:
-            <select name="ecash_address" placeholder="Select Addresses">
-                <option disabled selected value> -- select an option -- </option>
-                {% if addresses_list|length == 0%}
-                    <option disabled>No addresses found, please add an address from settings tab</option>
-                {% else %}
-                    {% for item in addresses_list %}
-                        <option value={{item}}>{{item}}</option>
-                    {% endfor %}
-                {% endif %}
-            </select>
-        </div>
-        <button type="submit" name="action" value="get_loan" class="btn">Get Loan</button>
-    </form>
+            <div class="form-row">
+                Ecash Wallet Address:
+                <select name="ecash_address" placeholder="Select Addresses">
+                    <option disabled selected value> -- select an option -- </option>
+                    {% if addresses_list|length == 0%}
+                        <option disabled>No addresses found, please add an address from settings tab</option>
+                    {% else %}
+                        {% for item in addresses_list %}
+                            <option value={{item}}>{{item}}</option>
+                        {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+            <button type="submit" name="action" value="get_loan" class="btn">Get Loan</button>
+        </form>
     </div>
 
 {% endblock %}

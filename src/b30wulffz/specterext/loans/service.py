@@ -47,9 +47,30 @@ class LoansService(Service):
     SPECTER_WALLET_ALIAS = "wallet"
 
     def callback_after_serverpy_init_app(self, scheduler: APScheduler):
-        def every5seconds(hello, world="world"):
-            with scheduler.app.app_context():
-                print(f"Called {hello} {world} every5seconds")
+
+        # custom struct for data storage
+        common_data = self.get_common_service_data()
+                
+        if "ecash_addresses" not in common_data:
+            common_data["ecash_addresses"] = {}
+        if "incoming_requests" not in common_data:
+            common_data["incoming_requests"] = []
+        if "active_loans" not in common_data:
+            common_data["active_loans"] = []
+        if "inactive_loans" not in common_data:
+            common_data["inactive_loans"] = []
+        if "return_btc" not in common_data:
+            common_data["return_btc"] = {}
+        if "deduct_btc" not in common_data:
+            common_data["deduct_btc"] = 0
+        if "return_ecash" not in common_data:
+            common_data["return_ecash"] = 0
+
+        self.update_common_service_data(common_data)
+    
+        # def every5seconds(hello, world="world"):
+        #     with scheduler.app.app_context():
+        #         print(f"Called {hello} {world} every5seconds")
         # Here you can schedule regular jobs. triggers can be one of "interval", "date" or "cron"
         # Examples:
         # interval: https://apscheduler.readthedocs.io/en/3.x/modules/triggers/interval.html
